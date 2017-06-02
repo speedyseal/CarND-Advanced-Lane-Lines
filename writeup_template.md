@@ -131,7 +131,7 @@ I followed the approach given in the lecture.
 2. Convert to HLS and grayscale, find appropriate thresholds to identify lanes on the channels
 3. Transform the perspective to find a radius of curvature and identify distances
 
-I then smooth the detection results by 10 frames, and have sanity checks to make sure the updates do not diverge too much from the averages.
+I then smooth the detection results by 5 frames, and have sanity checks to make sure the updates do not diverge too much from the averages.
 
 It is difficult to find a robust set of thresholds given the variation of road surfaces. Color appearance can also be affected by lighting, such as night driving.
 
