@@ -59,6 +59,8 @@ I take the transformation matrices and write them to a pickled file camera_cal.p
 To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
 ![alt text][undistortroad]
 
+I take the pickled calibration matrices and use the undistort 
+
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
 I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines 216 through 248 in `laneutils.py`).  Here's an example of my output for this step. The image was transformed into grayscale and HLS. I used the Sobel transform on the x dimension of the grayscaled image, Sobel x on the L channel, and value thresholding on the S channel.
@@ -116,7 +118,7 @@ I implemented this step in lines 365 through 382 in my code in `yet_another_file
 
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
-Here's a [link to my video result](./project_video.mp4)
+Here's the video on the segment of I-280 [![link to my video result](http://img.youtube.com/vi/5opxTJfPwwo/0.jpg)](https://youtu.be/5opxTJfPwwo)
 
 ---
 
