@@ -19,12 +19,11 @@ The goals / steps of this project are the following:
 
 [//]: # (Image References)
 
-[undistort]: ./examples/undistort.png "Undistorted"
-[image2]: ./test_images/test1.jpg "Road Transformed"
-[image3]: ./examples/binary_combo_example.jpg "Binary Example"
-[image4]: ./examples/warped_straight_lines.jpg "Warp Example"
-[image5]: ./examples/color_fit_lines.jpg "Fit Visual"
-[image6]: ./examples/example_output.jpg "Output"
+[undistort]: ./output_images/undistort.png "Undistorted"
+[undistortroad]: ./output_images/undistortroad.png "Road Transformed"
+[binary]: ./output_images/binary.png "Binary Example"
+[lanefit]: ./output_images/lanefit.png "Fit Visual"
+[annotated]: ./output_images/annotated.png "Output"
 [video1]: ./project_video.mp4 "Video"
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
@@ -58,13 +57,13 @@ I take the transformation matrices and write them to a pickled file camera_cal.p
 #### 1. Provide an example of a distortion-corrected image.
 
 To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
-![alt text][image2]
+![alt text][undistortroad]
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
 I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines 216 through 248 in `laneutils.py`).  Here's an example of my output for this step. The image was transformed into grayscale and HLS. I used the Sobel transform on the x dimension of the grayscaled image, Sobel x on the L channel, and value thresholding on the S channel.
 
-![alt text][image3]
+![alt text][binary]
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
@@ -84,18 +83,9 @@ The code for my perspective transform is on lines 335 through 354 in the file `l
 
 I pick points along straight lane lines to define the transformation trapezoid. I can slide up and down this trapezoid to define the far point of the transform using the variable ydes. This transforms to a fixed rectangular box in dst.
 
-This resulted in the following source and destination points:
-
-| Source        | Destination   | 
-|:-------------:|:-------------:| 
-| 585, 460      | 320, 0        | 
-| 203, 720      | 320, 720      |
-| 1127, 720     | 960, 720      |
-| 695, 460      | 960, 0        |
-
 I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
 
-![alt text][image4]
+![alt text][binary]
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
@@ -107,17 +97,18 @@ This cloud of x,y points that are presumably associated with the lane line is us
 
 Once a polynomial is identified, subsequent frames use the polynomial from the previous detection to determine a window of `margin=70` pixels to select pixels for polynomial fitting for updating the lane lines.
 
-![alt text][image5]
-
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
 I did this in lines 399 through 417 in my code in `laneutils.py`. Using the formula provided in the lectures, the 2nd order polynomial coefficients determine the radius of curvature, using appropriate scalings between pixels to real world distance. The position of the lane lines relative to the video frame is computed by taking the bottom pixels of the left and right lane polynomial expansions, finding the midpoint, and subtracting from the middle of the frame. This is converted from pixels to meters using the same scale factors for curvature calculation.
+
+![alt text][lanefit]
+
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
 I implemented this step in lines 365 through 382 in my code in `yet_another_file.py` in the function `map_lane()`.  This takes the plotted lane lines, fills a polygon region, and warps it back to the lane perspective. I also annotated the image with radius of curvature and distance from center using cv2.putText. Here is an example of my result on a test image:
 
-![alt text][image6]
+![alt text][annotated]
 
 ---
 
@@ -141,3 +132,13 @@ I followed the approach given in the lecture.
 I then smooth the detection results by 10 frames, and have sanity checks to make sure the updates do not diverge too much from the averages.
 
 It is difficult to find a robust set of thresholds given the variation of road surfaces. Color appearance can also be affected by lighting, such as night driving.
+
+A further improvement would be to spend more time on tuning the thresholds and make it adaptive to different road conditions.
+
+Another problem I notice is that when the vehicle goes over a bump, the suspension of the vehicle changes pitch or the camera mount wobbles. This skews the transformation and makes the assumptions for the perspective transformation incorrect. Also, going up or down a hill also violates the assumptions. The horizon is no longer where it is expected to be.
+
+To make this more robust, there needs to be 
+1. image stabilization
+2. horizon detection
+3. vehicle slope detection
+4. automatic identification of features that can be used to transform the perspective, e.g. straight lane line detection, or something more sophisticated.
