@@ -381,11 +381,22 @@ def highlightLane(undist, warped, left_fitx, right_fitx, ploty, Minv):
     result = cv2.addWeighted(undist, 1, newwarp, 0.3, 0)
     return result
 
-def findAngleOfCurvature(leftx, rightx, ploty, xdim, lanewidth_px=440, lanelength_px=720):
-    # Define conversions in x and y from pixels space to meters
-    ym_per_pix = 30/lanelength_px # meters per pixel in y dimension
-    xm_per_pix = 3.7/lanewidth_px # meters per pixel in x dimension
+# Define conversions in x and y from pixels space to meters
+lanewidth_px=440
+lanelength_px=720
+ym_per_pix = 30/lanelength_px # meters per pixel in y dimension
+xm_per_pix = 3.7/lanewidth_px # meters per pixel in x dimension
 
+
+def radiusOfCurvature(linex, ploty, xdim):
+    fit_cr = np.polyfit(ploty*ym_per_pix, linex*xm_per_pix, 2)
+    y_eval = np.max(ploty)
+    # Calculate the new radii of curvature
+    curverad = ( ((1 + (2*fit_cr[0]*y_eval*ym_per_pix + fit_cr[1])**2)**1.5) 
+                      / np.absolute(2*fit_cr[0]) )
+    return curverad
+
+def findAngleOfCurvature(leftx, rightx, ploty, xdim):
     # Fit new polynomials to x,y in world space
     left_fit_cr = np.polyfit(ploty*ym_per_pix, leftx*xm_per_pix, 2)
     right_fit_cr = np.polyfit(ploty*ym_per_pix, rightx*xm_per_pix, 2)
@@ -411,9 +422,9 @@ def annotateImage(img, leftRad, rightRad, posCenter):
     rs = "right radius: {0:.0f} m".format(rightRad)
     cs = "dist: {0:.2f} m".format(posCenter)
 
-    cv2.putText(img, ls, (100, 30), cv2.FONT_HERSHEY_PLAIN, 2, (255,0,0), 3)
-    cv2.putText(img, rs, (100, 60), cv2.FONT_HERSHEY_PLAIN, 2, (255,0,0), 3)
-    cv2.putText(img, cs, (100, 90), cv2.FONT_HERSHEY_PLAIN, 2, (255,0,0), 3)
+    cv2.putText(img, ls, (10, 30), cv2.FONT_HERSHEY_PLAIN, 2, (255,0,0), 3)
+    cv2.putText(img, rs, (10, 60), cv2.FONT_HERSHEY_PLAIN, 2, (255,0,0), 3)
+    cv2.putText(img, cs, (10, 90), cv2.FONT_HERSHEY_PLAIN, 2, (255,0,0), 3)
 
 
 def processImage(img, sobelx_thres=(20, 100), s_thres = (170, 255)):
@@ -429,51 +440,96 @@ def processImage(img, sobelx_thres=(20, 100), s_thres = (170, 255)):
     annotateImage(result, aocl, aocr, posCenter)
     return result
 
+# number of frames history to keep
+N = 5
+Timer = 0
+
+def sanityChecks(left_fitx, right_fitx, ploty, xpixels, rocl, rocr):
+    # conditions to accept new line measure
+    # roc < % of avg
+    # xright - xleft within tolerance
+    # xleft, xright within bounds
+    leftinbound = left_fitx[-1] > 0.05 * xpixels and left_fitx[-1] < 0.45 * xpixels
+    rightinbound = right_fitx[-1] > 0.55 * xpixels and right_fitx[-1] < 0.95 * xpixels
+    #print("leftinbound {}".format(leftinbound))
+    #print("rightinbound {}".format(rightinbound))
+
+    bottomwidth =  (right_fitx[-1] - left_fitx[-1])
+    bottomwidthok = bottomwidth > lanewidth_px*0.8 and bottomwidth < lanewidth_px*1.4
+    #print("bottomwidth {}, bottomwidthok {}".format(bottomwidth, bottomwidthok))
+
+    topwidth = (right_fitx[0] - left_fitx[0])
+    topwidthok = topwidth > lanewidth_px*0.6 and topwidth < lanewidth_px*1.6
+    #print("topwidth {}, topwidthok {}".format(topwidth, topwidthok))
+
+    leftradiusok = (left_line.radius_of_curvature == None or left_line.radius_of_curvature > 800.
+                    or np.abs((left_line.radius_of_curvature - rocl)/left_line.radius_of_curvature) < .5)
+    rightradiusok = (right_line.radius_of_curvature == None or right_line.radius_of_curvature > 800.
+                     or np.abs((right_line.radius_of_curvature - rocr)/right_line.radius_of_curvature) < .5)
+    #print("leftradok {}, rightradok {}".format(leftradiusok, rightradiusok))
+    status = "lib:{} rib:{} bwo:{} two:{} lro:{} rro:{}".format(leftinbound, rightinbound, bottomwidthok, topwidthok, leftradiusok, rightradiusok)
+    return (leftinbound and rightinbound and bottomwidthok and topwidthok and leftradiusok and rightradiusok, status)
+    
 def processImageSeq(img, sobelx_thres=(20, 100), s_thres = (170, 255), visualize=False):
-    global left_line, right_line
+    global left_line, right_line, Timer
     mtx = dist_pickle['mtx']
     dist = dist_pickle['dist']
     img = cv2.undistort(img, mtx, dist, None, mtx)
     warped, Minv = thresholdImage(img, sobelx_thres, s_thres, visualize=visualize)
-    if (left_line.best_fit != None) and (right_line.best_fit != None):
+    if not(left_line.best_fit is None) and not (right_line.best_fit is None):
         left_fitx, right_fitx, ploty, out_img, left_fit, right_fit = findNextLane(
-        warped, left_fit, right_fit, visualize=visualize)        
+        warped, left_line.best_fit, right_line.best_fit, visualize=visualize)        
     else:
         left_fitx, right_fitx, ploty, out_img, left_fit, right_fit = findLanes(warped, visualize=visualize)
 
-    aocl, aocr, posCenter = findAngleOfCurvature(left_fitx, right_fitx, ploty, img.shape[1])
-    result = highlightLane(img, warped, left_fitx, right_fitx, ploty, Minv)
-    annotateImage(result, aocl, aocr, posCenter)
-    
-#    if left_line.recent_xfitted :
-#    left_line.recent_xfitted.append(left_fitx[-1])
-#    left_line.recent_xfitted.popleft()
-#    right_line.recent_xfitted.append(right_fitx[-1])
-#    right_line.recent_xfitted.popleft()
-#
-#    left_line.bestx = np.mean(left_line.recent_xfitted)
-#    right_line.bestx = np.mean(right_line.recent_xfitted)
-    
-    
-    
+    rocl, rocr, posCenter = findAngleOfCurvature(left_fitx, right_fitx, ploty, img.shape[1])
+    checksOk, status = sanityChecks(left_fitx, right_fitx, ploty, img.shape[1], rocl, rocr)
+    if checksOk:
+        left_line.update(left_fitx, left_fit)
+        right_line.update(right_fitx, right_fit)
+        roclnew, rocrnew, posCenterNew = findAngleOfCurvature(left_line.bestx, right_line.bestx, ploty, img.shape[1])
+        left_line.radius_of_curvature = roclnew
+        right_line.radius_of_curvature = rocrnew
+        left_line.line_base_pos = posCenterNew
+        Timer = 0
+    else:
+        Timer += 1
+        if Timer == 10:
+            resetLaneFinder()
+
+    if not (left_line.bestx is None) and not (right_line.bestx is None):
+        result = highlightLane(img, warped, left_line.bestx, right_line.bestx, ploty, Minv)
+        annotateImage(result, left_line.radius_of_curvature, right_line.radius_of_curvature, left_line.line_base_pos)
+    else:
+        result = highlightLane(img, warped, left_fitx, right_fitx, ploty, Minv)
+        annotateImage(result, rocl, rocr, posCenter)
+        cv2.putText(result, "RESET", (10, 670), cv2.FONT_HERSHEY_PLAIN, 2, (180,0,10), 3)
+
+    if not checksOk:
+        cv2.putText(result, status, (10, 700), cv2.FONT_HERSHEY_PLAIN, 2, (255,0,0), 3)
+
+        
     return result
 
 # Define a class to receive the characteristics of each line detection
 from collections import deque
 class Line():
     def __init__(self):
+        # circular buffer index
+        self.i = 0
         # was the line detected in the last iteration?
-        self.detected = False  
+        self.detected = False
         # x values of the last n fits of the line
-        self.recent_xfitted = deque([])
+        self.recent_xfitted = None
         #average x values of the fitted line over the last n iterations
-        self.bestx = None     
+        self.bestx = None
         #polynomial coefficients averaged over the last n iterations
-        self.best_fit = None  
+        self.best_fit = None
         #polynomial coefficients for the most recent fit
-        self.current_fit = deque([np.array([False])])
+        self.current_fit = None
         #radius of curvature of the line in some units
         self.radius_of_curvature = None 
+
         #distance in meters of vehicle center from the line
         self.line_base_pos = None 
         #difference in fit coefficients between last and new fits
@@ -482,13 +538,25 @@ class Line():
         self.allx = None  
         #y values for detected line pixels
         self.ally = None
+    def update(self, fitx, fit):
+        if not (self.recent_xfitted is None):
+            self.recent_xfitted[self.i,:] = fitx
+        else:
+            self.recent_xfitted = np.tile(fitx, (N, 1))
+        self.bestx = np.mean(self.recent_xfitted, axis=0)
+        if not (self.current_fit is None):
+            self.current_fit[self.i,:] = fit
+        else:
+            self.current_fit = np.tile(fit, (N, 1))
+        self.best_fit = np.mean(self.current_fit, axis=0)
+        self.detected = True
+        self.i += 1
+        self.i %= N
 
 left_line = Line()
 right_line = Line()
 
 def resetLaneFinder():
-    global left_fit, right_fit, left_line, right_line
-    left_fit = None
-    right_fit = None
+    global left_line, right_line
     left_line = Line()
-    right-line = Line()
+    right_line = Line()
