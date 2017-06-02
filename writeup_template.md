@@ -20,7 +20,7 @@ The goals / steps of this project are the following:
 [//]: # (Image References)
 
 [undistort]: ./output_images/undistort.png "Undistorted"
-[undistortroad]: ./output_images/undistortroad.png "Road Transformed"
+[undistortroad]: ./output_images/undistortedroad.png "Road Transformed"
 [binary]: ./output_images/binary.png "Binary Example"
 [lanefit]: ./output_images/lanefit.png "Fit Visual"
 [annotated]: ./output_images/annotated.png "Output"
